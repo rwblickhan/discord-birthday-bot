@@ -1,0 +1,13 @@
+name = "discord-birthday-bot"
+main = "src/index.ts"
+compatibility_date = "2022-12-24"
+
+[triggers]
+crons = [ "0 17 * * *" ]
+
+[vars]
+DISCORD_GUILD_ID = "1023106216328712282"
+DISCORD_ANNOUNCEMENTS_CHANNEL_ID = "1046916574021419058"
+GOOGLE_SHEETS_SPREADSHEET_ID = "1-Ptme-rK3S2ShWdKCkfA6zN3RRJu-njjbc6dk2qCu1c"
+GOOGLE_SHEETS_SHEET_ID = "0"
+SENTRY_DSN = "https://046c2475d4c84170bf4e57af34bfb71b@o4504233599172608.ingest.sentry.io/4504385289191424"
