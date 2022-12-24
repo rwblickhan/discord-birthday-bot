@@ -22,6 +22,10 @@ export interface Env {
     SENTRY_DSN: string;
 }
 
+export interface SpreadsheetResults {
+    values: string[][];
+}
+
 export default {
     async scheduled(
         controller: ScheduledController,
@@ -37,19 +41,28 @@ export default {
         //     category: "log",
         // });
 
-        const spreadsheet_url = `https://sheets.googleapis.com/v4/spreadsheets/${env.GOOGLE_SHEETS_SPREADSHEET_ID}`;
-        const spreadsheet_response = await fetch(spreadsheet_url, {
+        const range = "A2:C";
+        const birthdays_url = `https://sheets.googleapis.com/v4/spreadsheets/${env.GOOGLE_SHEETS_SPREADSHEET_ID}/values/${range}`;
+        const birthdays_response = await fetch(birthdays_url, {
             headers: {
                 "X-goog-api-key": env.GOOGLE_SHEETS_API_TOKEN,
                 "Content-Type": "application/json",
             },
         });
-        if (!spreadsheet_response.ok) {
-            const error = spreadsheet_response.text();
+        if (!birthdays_response.ok) {
+            const error = birthdays_response.text();
             console.log(error);
             return;
         }
-        const vals = await spreadsheet_response.json();
-        console.log(JSON.stringify(vals));
+        const spreadsheet_rows =
+            (await birthdays_response.json()) as SpreadsheetResults;
+        const values = spreadsheet_rows.values;
+        for (const value of values) {
+            console.log(`name: ${value[0]}`);
+            console.log(`date string: ${value[1]}`);
+            console.log(`username: ${value[2]}`);
+            const date = new Date(value[1]);
+            console.log(`date: ${date.toDateString()}`);
+        }
     },
 };
