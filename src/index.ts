@@ -17,13 +17,20 @@ export interface Env {
     DISCORD_GUILD_ID: string;
     GOOGLE_SHEETS_API_TOKEN: string;
     GOOGLE_SHEETS_SPREADSHEET_ID: string;
-    GOOGLE_SHEETS_SHEET_ID: string;
     DISCORD_ANNOUNCEMENTS_CHANNEL_ID: string;
     SENTRY_DSN: string;
 }
 
 export interface SpreadsheetResults {
     values: string[][];
+}
+
+export interface GuildMember {
+    user: User;
+}
+
+export interface User {
+    id: string;
 }
 
 export default {
@@ -38,6 +45,48 @@ export default {
         });
         sentry.addBreadcrumb({
             message: "Loading environment variables...",
+            category: "log",
+        });
+        if (
+            env.DISCORD_API_TOKEN === null ||
+            env.DISCORD_API_TOKEN.length === 0
+        ) {
+            const message = "Failed to find Discord API token";
+            sentry.captureException(message);
+            throw new Error(message);
+        }
+        if (
+            env.DISCORD_GUILD_ID === null ||
+            env.DISCORD_GUILD_ID.length === 0
+        ) {
+            const message = "Failed to find Discord guild ID";
+            sentry.captureException(message);
+            throw new Error(message);
+        }
+        if (env.DISCORD_ANNOUNCEMENTS_CHANNEL_ID === null) {
+            const message = "Failed to find Discord announcements channel ID";
+            sentry.captureException(message);
+            throw new Error(message);
+        }
+        if (
+            env.GOOGLE_SHEETS_API_TOKEN === null ||
+            env.GOOGLE_SHEETS_API_TOKEN.length === 0
+        ) {
+            const message = "Failed to find Google Sheets API token";
+            sentry.captureException(message);
+            throw new Error(message);
+        }
+        if (
+            env.GOOGLE_SHEETS_SPREADSHEET_ID === null ||
+            env.GOOGLE_SHEETS_SPREADSHEET_ID.length === 0
+        ) {
+            const message = "Failed to find Google Sheets spreadsheet ID";
+            sentry.captureException(message);
+            throw new Error(message);
+        }
+
+        sentry.addBreadcrumb({
+            message: "Requesting spreadsheet values...",
             category: "log",
         });
 
@@ -65,13 +114,54 @@ export default {
         const now = new Date();
         for (const value of values) {
             const date = new Date(value[1]);
-            const username = new Date(value[2]);
+            const username = value[2];
             if (
                 date.getUTCMonth() === now.getUTCMonth() &&
                 date.getUTCDate() === now.getUTCDate()
             ) {
-                let content = `Hey all! It's @${username}'s birthday today! Let's all wish them a happy birthday! 🥳`;
+                console.log(`Searching for user ID for ${username}...`);
+                sentry.addBreadcrumb({
+                    message: `Sending message for ${username}...`,
+                    category: "log",
+                });
 
+                const search_url = `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/members/search?query=${username}&limit=1`;
+                const search_response = await fetch(search_url, {
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bot ${env.DISCORD_API_TOKEN}`,
+                    },
+                    method: "GET",
+                });
+
+                if (!search_response.ok) {
+                    const error = await search_response.text();
+                    sentry.addBreadcrumb({
+                        message: error,
+                        category: "error",
+                    });
+                    sentry.captureException(search_response);
+                    throw new Error(`Failed to find user: ${error}`);
+                }
+                const guildMembers =
+                    (await search_response.json()) as GuildMember[];
+                if (guildMembers.length !== 1) {
+                    const error = `Received unexpected number of search results for user: ${username}`;
+                    sentry.addBreadcrumb({
+                        message: error,
+                        category: "error",
+                    });
+                    sentry.captureException(error);
+                    throw new Error(error);
+                }
+                const guildMember = guildMembers[0];
+
+                sentry.addBreadcrumb({
+                    message: `Sending message for ${username}...`,
+                    category: "log",
+                });
+
+                let content = `Hey all! It's <@${guildMember.user.id}>'s birthday today! Let's all wish them a happy birthday! 🥳`;
                 const message_announcements_url = `https://discord.com/api/v10/channels/${env.DISCORD_ANNOUNCEMENTS_CHANNEL_ID}/messages`;
                 const message_response = await fetch(
                     message_announcements_url,
