@@ -10,7 +10,7 @@
  * Learn more at https://developers.cloudflare.com/workers/runtime-apis/scheduled-event/
  */
 
-// import { Toucan } from "toucan-js";
+import { Toucan } from "toucan-js";
 
 export interface Env {
     DISCORD_API_TOKEN: string;
@@ -33,13 +33,13 @@ export default {
         ctx: ExecutionContext
     ): Promise<void> {
         console.log(`Starting the bot...`);
-        // const sentry = new Toucan({
-        //     dsn: env.SENTRY_DSN,
-        // });
-        // sentry.addBreadcrumb({
-        //     message: "Loading environment variables...",
-        //     category: "log",
-        // });
+        const sentry = new Toucan({
+            dsn: env.SENTRY_DSN,
+        });
+        sentry.addBreadcrumb({
+            message: "Loading environment variables...",
+            category: "log",
+        });
 
         const range = "A2:C";
         const birthdays_url = `https://sheets.googleapis.com/v4/spreadsheets/${env.GOOGLE_SHEETS_SPREADSHEET_ID}/values/${range}`;
@@ -50,19 +50,52 @@ export default {
             },
         });
         if (!birthdays_response.ok) {
-            const error = birthdays_response.text();
-            console.log(error);
-            return;
+            const error = await birthdays_response.text();
+            sentry.addBreadcrumb({
+                message: error,
+                category: "error",
+            });
+            sentry.captureException(birthdays_response);
+            throw new Error(`Failed to retrieve spreadsheet: ${error}`);
         }
         const spreadsheet_rows =
             (await birthdays_response.json()) as SpreadsheetResults;
         const values = spreadsheet_rows.values;
+
+        const now = new Date();
         for (const value of values) {
-            console.log(`name: ${value[0]}`);
-            console.log(`date string: ${value[1]}`);
-            console.log(`username: ${value[2]}`);
             const date = new Date(value[1]);
-            console.log(`date: ${date.toDateString()}`);
+            const username = new Date(value[2]);
+            if (
+                date.getUTCMonth() === now.getUTCMonth() &&
+                date.getUTCDate() === now.getUTCDate()
+            ) {
+                let content = `Hey all! It's @${username}'s birthday today! Let's all wish them a happy birthday! 🥳`;
+
+                const message_announcements_url = `https://discord.com/api/v10/channels/${env.DISCORD_ANNOUNCEMENTS_CHANNEL_ID}/messages`;
+                const message_response = await fetch(
+                    message_announcements_url,
+                    {
+                        headers: {
+                            "Content-Type": "application/json",
+                            Authorization: `Bot ${env.DISCORD_API_TOKEN}`,
+                        },
+                        method: "POST",
+                        body: JSON.stringify({
+                            content: content,
+                        }),
+                    }
+                );
+                if (!message_response.ok) {
+                    const error = await message_response.text();
+                    sentry.addBreadcrumb({
+                        message: error,
+                        category: "error",
+                    });
+                    sentry.captureException(message_response);
+                    throw new Error(`Failed to post message: ${error}`);
+                }
+            }
         }
     },
 };
